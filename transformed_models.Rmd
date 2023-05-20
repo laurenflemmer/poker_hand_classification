@@ -1,0 +1,158 @@
+---
+title: "Models With Transformed Data"
+author: "Harpeth Lee"
+date: "2023-05-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+```{r}
+train <- read.csv("/Users/johnlee/Stat254/Project/Data/poker-hand-training-transformed.csv")
+test <- read.csv("/Users/johnlee/Stat254/Project/Data/poker-hand-test-transformed.csv")
+
+train$hand <- as.factor(train$hand)
+test$hand <- as.factor(test$hand)
+```
+
+## Random Forest
+
+```{r}
+library(randomForest)
+
+mtry <- sqrt(ncol(train) - 1)
+
+rf <- randomForest(hand ~., data = train, mtry = mtry)
+```
+
+```{r}
+set.seed(123)
+
+test_samp <- test[sample(1:nrow(test), 100000), ]
+
+rf_preds <- predict(rf, test_samp)
+
+sum(rf_preds == test_samp$hand)/length(rf_preds)
+
+table(rf_preds, test_samp$hand)
+```
+
+## Weighted Random Forest
+
+```{r}
+rf_weighted <- randomForest(hand ~., data = train,
+                            mtry = mtry, classwt = table(train$hand))
+
+set.seed(112233)
+
+test_samp <- test[sample(1:nrow(test), 100000), ]
+
+rfw_preds <- predict(rf_weighted, test_samp)
+
+sum(rfw_preds == test_samp$hand)/length(rfw_preds)
+
+table(rfw_preds, test_samp$hand)
+```
+
+Adding weights doesn't improve the performance of the random forest.
+
+
+## Inverse Weighted Random Forest
+
+```{r}
+rf_inweighted <- randomForest(hand ~., data = train,
+                            mtry = mtry, classwt = 1/table(train$hand))
+
+set.seed(11)
+
+test_samp <- test[sample(1:nrow(test), 100000), ]
+
+rfiw_preds <- predict(rf_inweighted, test_samp)
+
+sum(rfiw_preds == test_samp$hand)/length(rfiw_preds)
+
+table(rfiw_preds, test_samp$hand)
+```
+
+Inverse weighting has caused the quality of the results to slightly decline.
+
+## SVM
+
+```{r}
+library(e1071)
+
+svm_mod <- svm(hand ~., data = train, kernel = "linear")
+```
+
+
+```{r}
+set.seed(321)
+
+svm_test <- test[sample(1:nrow(test), 100000), ]
+
+svm_preds <- predict(svm_mod, svm_test)
+
+sum(svm_preds == svm_test$hand)/length(svm_preds)
+
+table(svm_preds, svm_test$hand)
+```
+
+## SM Radial Kernel
+
+```{r}
+svm_rad_mod <- svm(hand ~., data = train, kernel = "radial")
+
+set.seed(4321)
+
+svm_test <- test[sample(1:nrow(test), 100000), ]
+
+svm_rad_preds <- predict(svm_rad_mod, svm_test)
+
+sum(svm_rad_preds == svm_test$hand)/length(svm_rad_preds)
+
+table(svm_rad_preds, svm_test$hand)
+```
+
+Adding the radial kernel greatly improves the performance of the 
+
+## SVM Weighted Radial Kernel
+
+```{r}
+svmwr_mod <- svm(hand ~., data = train,
+                   kernel = "radial", class.weights = table(train$hand))
+
+set.seed(3321)
+
+svm_test <- test[sample(1:nrow(test), 100000), ]
+
+svmwr_preds <- predict(svmwr_mod, svm_test)
+
+sum(svmwr_preds == svm_test$hand)/length(svmwr_preds)
+
+table(svmwr_preds, svm_test$hand)
+```
+
+## SVM Inverse Weighted Radial Kernel
+
+```{r}
+svmiwr_mod <- svm(hand ~., data = train,
+                   kernel = "radial", class.weights = 1/table(train$hand))
+
+set.seed(33)
+
+svm_test <- test[sample(1:nrow(test), 100000), ]
+
+svmiwr_preds <- predict(svmiwr_mod, svm_test)
+
+sum(svmiwr_preds == svm_test$hand)/length(svmiwr_preds)
+
+table(svmiwr_preds, svm_test$hand)
+
+
+
+```
+
+
+Inverse weighting does not look to work well in this case where there are drastically different sizes of classes.

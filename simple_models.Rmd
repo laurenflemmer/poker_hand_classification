@@ -1,0 +1,220 @@
+---
+title: "Early Attempts At Modeling"
+author: "Harpeth Lee"
+date: "2023-04-06"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+```{r}
+## Read in Data
+
+train <- read.csv("../Data/poker-hand-training-true.data")
+test <- read.csv("../Data/poker-hand-testing.data")
+```
+
+```{r}
+## Rename Variables
+
+var_names <- c("S1", "C1", "S2", "C2", "S3", "C3", "S4", "C4", "S5", "C5", "Hand")
+
+colnames(train) <- var_names
+colnames(test) <- var_names
+
+train$Hand <- as.factor(train$Hand)
+test$Hand <- as.factor(test$Hand)
+
+library(ggplot2)
+
+ggplot(data = train, aes(x = Hand)) +
+  geom_bar() +
+  ggtitle("Count Of Each Hand") +
+  geom_text(stat='count', aes(label=after_stat(count)), vjust=-0.25) +
+  theme_minimal()
+```
+
+
+
+## Random Forest
+
+
+```{r}
+library(randomForest)
+
+rf_mod <- randomForest(train[1:1000, 1:10], as.factor(train$Hand[1:1000]),
+                       mtry = sqrt(ncol(train)))
+```
+
+```{r}
+rf_preds <- predict(rf_mod, test[1:1000, 1:10], type = "response")
+
+table(test$Hand[1:1000], rf_preds)
+
+sum(rf_preds == test$Hand[1:1000])/length(test$Hand)
+```
+
+This initial random forest model performs decently. 
+
+## KNN
+
+```{r}
+library(Hand)
+
+## KNN k=1
+
+knn_1 <- knn(train[1:1000, 1:10], test[, 1:10], cl = train$Hand[1:1000], k = 1)
+
+table(test$Hand, knn_1)
+
+sum(knn_1 == test$Hand)/length(knn_1)
+```
+
+```{r}
+## KNN k=5
+
+knn_5 <- knn(train[1:1000, 1:10], test[, 1:10], cl = train$Hand[1:1000], k = 5)
+
+table(test$Hand, knn_5)
+
+sum(knn_5 == test$Hand)/length(knn_5)
+```
+
+```{r}
+## KNN k=10
+
+knn_10 <- knn(train[1:1000, 1:10], test[, 1:10], cl = train$Hand[1:1000], k = 10)
+
+table(test$Hand, knn_10)
+
+sum(knn_10 == test$Hand)/length(knn_10)
+```
+
+Basic KNN isn't giving great results. May need to tweak somehow.
+
+## Data Transformation
+
+
+```{r}
+## Creates Binary Variable for Suite
+to_binary <- function(suite) {sapply(suite, function(x){
+  
+  vec <- rep(0, 4)
+  vec[x] <- 1
+  vec
+})
+}
+
+
+## For Train Data
+
+S1 <- t(to_binary(train$S1))
+S2 <- t(to_binary(train$S2))
+S3 <- t(to_binary(train$S3))
+S4 <- t(to_binary(train$S4))
+S5 <- t(to_binary(train$S5))
+
+suite <- cbind(S1, S2, S3, S4, S5)
+
+card <- c("S1", "S2", "S3", "S4", "S5")
+suites <- 1:4
+
+combos <- expand.grid(suites, card)
+
+combos <- combos[, c(2,1)]
+
+bin_names <- apply(combos, 1, paste, collapse="_")
+
+colnames(suite) <- bin_names
+
+poker_train <- cbind(suite, train[, c(seq(2,10, by = 2), 11)])
+
+## For test data
+
+S1_test <- t(to_binary(test$S1))
+S2_test <- t(to_binary(test$S2))
+S3_test <- t(to_binary(test$S3))
+S4_test <- t(to_binary(test$S4))
+S5_test <- t(to_binary(test$S5))
+
+suite_test <- cbind(S1_test, S2_test, S3_test, S4_test, S5_test)
+colnames(suite_test) <- bin_names
+
+poker_test <- cbind(suite_test, test[, c(seq(2,10, by = 2), 11)])
+
+
+poker_train$Hand <- as.factor(poker_train$Hand)
+poker_test$Hand <- as.factor(poker_test$Hand)
+```
+
+
+```{r}
+library(Hand)
+
+## KNN on Data with Binary Variable
+
+knn_tr1 <- knn(poker_train[1:1000, 1:25], poker_test[, 1:25],
+               poker_train$Hand[1:1000], k = 1)
+
+sum(knn_tr1 == poker_test$Hand)/length(knn_tr1)
+
+table(poker_test$Hand, knn_tr1)
+```
+
+```{r}
+## KNN on Data with Binary Variable
+
+knn_tr5 <- knn(poker_train[, 1:25], poker_test[1:10000, 1:25],
+               poker_train$Hand, k = 5)
+
+sum(knn_tr5 == poker_test$Hand[1:10000])/length(knn_tr5)
+
+table(poker_test$Hand[1:10000], knn_tr5)
+```
+
+## SVM
+
+```{r}
+library(e1071)
+
+## SVM
+
+svm_mod <- svm(poker_train[1:10000, 1:25], poker_train$Hand[1:10000],probability = TRUE)
+
+svm_preds <- predict(svm_mod, poker_test[1:5000, 1:25],
+                     decision.values = TRUE, probability = TRUE)
+
+sum(svm_preds == poker_test$Hand[1:5000])/length(svm_preds)
+
+table(poker_test$Hand[1:5000], svm_preds)
+```
+
+```{r}
+## SVM with Radial Kernel
+
+svm_rad <- svm(poker_train[1:10000, 1:25], poker_train$Hand[1:10000],
+               probability = TRUE, kernel = "radial")
+
+rad_preds <- predict(svm_rad, poker_test[1:5000, 1:25],
+                     decision.values = TRUE, probability = TRUE)
+
+sum(rad_preds == poker_test$Hand[1:5000])/length(rad_preds)
+
+table(poker_test$Hand[1:5000], rad_preds)
+```
+
+```{r}
+## SVM With Sigmoid Kernel
+
+svm_sig <- svm(poker_train[1:10000, 1:25], poker_train$Hand[1:10000],
+               probability = TRUE, kernel = "sigmoid")
+
+sig_preds <- predict(svm_sig, poker_test[1:5000, 1:25],
+                     decision.values = TRUE, probability = TRUE)
+
+sum(sig_preds == poker_test$Hand[1:5000])/length(sig_preds)
+
+table(poker_test$Hand[1:5000], sig_preds)
+```

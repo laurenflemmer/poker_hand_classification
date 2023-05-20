@@ -1,0 +1,82 @@
+---
+title: "Stat254 Poker Hand Classification"
+author: "Lauren Flemmer"
+date: "2023-04-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(EnsCat)
+library(class)
+library(caret)
+library(gmodels)
+library(mltest)
+library(scutr)
+```
+
+
+## Read in data
+```{r}
+poker_train <- read.csv('/Users/laurenflemmer/Desktop/poker_proj/data/poker-hand-training-transformed.csv')
+poker_test <- read.csv('/Users/laurenflemmer/Desktop/poker_proj/data/poker-hand-test-transformed.csv')
+```
+
+```{r}
+# train and test splits
+poker_cards_train = poker_train %>% select(1:17)
+poker_cards_test = poker_test %>% select(1:17)
+
+poker_hand_train = poker_train %>% select(18)
+poker_hand_test = poker_test %>% select(18)
+
+```
+
+## K-Nearest Neighbors
+```{r}
+
+# perform KNN classification
+  # pretty sure it uses hamming distance by default
+model <- knn(train=poker_cards_train, test=poker_cards_test, cl=poker_hand_train$hand, k=10)
+
+# testing results
+table(poker_hand_test$hand, model)
+results <- ml_test(model, poker_hand_test$hand, output.as.table = FALSE)
+results
+
+```
+
+
+### Oversample from minority classes
+```{r}
+print("Before oversampling: \n")
+table(poker_train$hand)
+
+# use SMOTE to oversample minority classes (done in python, exported to csv)
+oversampled_data <- read.csv('/Users/laurenflemmer/Desktop/poker_proj/data/oversampled_train.csv')
+table(oversampled_data$hand)
+
+```
+
+
+```{r}
+# train and test splits
+poker_cards_train_over = oversampled_data %>% select(2:18)
+poker_hand_train_over = oversampled_data %>% select(19)
+
+```
+
+
+## K-Nearest Neighbors with Oversampled Data
+```{r}
+
+# perform KNN classification
+model_oversampled <- knn(train=poker_cards_train_over, test=poker_cards_test, cl=poker_hand_train_over$hand, k=10)
+
+# testing results
+table(poker_hand_test$hand, model_oversampled)
+results_over <- ml_test(model_oversampled, poker_hand_test$hand, output.as.table = FALSE)
+results_over
+
+```
